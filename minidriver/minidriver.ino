@@ -269,15 +269,6 @@ void setup()
   pinMode(13, OUTPUT);
   
   Serial.begin(115200);
-  
-  //digitalWrite(13, HIGH);
-  Serial.println("Thy bidding?");
-  int i = 1;
-  Serial.print(i);
-  float f;
-  Serial.write((char*)&f, 2);
-  //delay(100);
-  //digitalWrite(13, LOW);
 }
 
 boolean Done = false;
@@ -329,7 +320,19 @@ void readings2()
   }
 }
 
+// simulate sending some data, just for checking binary size
+void sendData()
+{
+  float f = 0.1;
+  Serial.write((char*)&f, 2);
+  int i = 0;
+  Serial.write((char*)&i, 2);
+  unsigned long l = 0;
+  Serial.write((char*)&l, 4);
+}
+
 void loop()
 {
   processSerialInput();
+  sendData();
 }
