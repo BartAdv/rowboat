@@ -4,6 +4,11 @@
 
 #include "motor.h"
 #include "LPS.h"
+#include "L3G.h"
+#include "LSM303.h"
+
+L3G Gyro;
+LSM303 Compass;
 
 const int LEFT_MOTOR_DIR_PIN = 7;
 const int LEFT_MOTOR_PWM_PIN = 9;

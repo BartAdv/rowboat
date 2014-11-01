@@ -1,3 +1,9 @@
 [submodule "minidriver/libs/lps-arduino"]
 	path = minidriver/libs/lps-arduino
 	url = https://github.com/pololu/lps-arduino
+[submodule "minidriver/libs/l3g-arduino"]
+	path = minidriver/libs/l3g-arduino
+	url = https://github.com/pololu/l3g-arduino
+[submodule "minidriver/libs/lsm303-arduino"]
+	path = minidriver/libs/lsm303-arduino
+	url = https://github.com/pololu/lsm303-arduino
