@@ -3,12 +3,7 @@
 // http://letsmakerobots.com/node/38636
 
 #include "motor.h"
-#include "LPS.h"
-#include "L3G.h"
-#include "LSM303.h"
-
-L3G Gyro;
-LSM303 Compass;
+#include "IMU.h"
 
 const int LEFT_MOTOR_DIR_PIN = 7;
 const int LEFT_MOTOR_PWM_PIN = 9;
@@ -55,12 +50,12 @@ void encoderTick(Motor& m)
 
 int leftPwm(unsigned long ticktime)
 {
-  return pow(ticktime / 41607161.2536758, -0.7039581);
+  return 200;// pow(ticktime / 41607161.2536758, -0.7039581);
 }
 
 int rightPwm(unsigned long ticktime)
 {
-  return pow(ticktime / 42061109.0080257, -0.7066563);
+  return 200;//pow(ticktime / 42061109.0080257, -0.7066563);
 }
 
 Motor LeftMotor = { 
@@ -266,69 +261,25 @@ void setup()
   attachInterrupt(0, leftEncoderISR, RISING);
   attachInterrupt(1, rightEncoderISR, RISING);
   
-  pinMode(13, OUTPUT);
+  IMU_init();
   
   Serial.begin(115200);
+  Serial.write("Thy bidding?\n", 13);
 }
 
-boolean Done = false;
-
-void readings()
-{
-  static boolean Started = false;
-  if(!Started)
-  {
-    Motor& m = LeftMotor;
-    setForward(m);
-    setPwm(m, 125);
-    Started = true;
-  }
-  
-  unsigned long t = micros();
-  int v = analogRead(A0);
-  int pv = analogRead(POWER_PIN);
-  Serial.write((char*)&t, 4);
-  Serial.write((char*)&v, 2);
-  Serial.write((char*)&pv, 2);
-}
-
-void readings2()
-{
-  for(int pwm=100; pwm<=255; pwm+=5)
-  {
-    setForward(LeftMotor);
-    setForward(RightMotor);
-    setPwm(LeftMotor, pwm);
-    setPwm(RightMotor, pwm);
-    LeftMotor.EncoderTick = RightMotor.EncoderTick = 0;
-    
-    Motor& m = RightMotor;
-    volatile boolean& ticked = rightTick;
-    
-    while(m.EncoderTick < 128)
-    {
-      while(!ticked) {}
-      noInterrupts();
-      ticked = false;
-      unsigned long tc = m.EncoderTick;
-      unsigned long tt = m.EncoderTickTime;
-      interrupts();
-        
-      Serial.write((char*)&pwm, 2);
-      Serial.write((char*)&tt, 4);
-    }
-  }
-}
-
-// simulate sending some data, just for checking binary size
 void sendData()
 {
-  float f = 0.1;
-  Serial.write((char*)&f, 2);
-  int i = 0;
-  Serial.write((char*)&i, 2);
-  unsigned long l = 0;
-  Serial.write((char*)&l, 4);
+  static unsigned long t = 0;
+  if(millis() - t < 100)
+    return;
+  t = millis();
+  
+  float x, y, z;
+  //IMU_readGyro(x, y, z);
+  Serial.write((char*)&x, 2);
+  Serial.write((char*)&y, 2);
+  Serial.write((char*)&z, 2);
+  Serial.write("\n", 1);
 }
 
 void loop()

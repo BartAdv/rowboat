@@ -1,12 +1,12 @@
 import serial
-import msvcrt
 import struct
+import numpy
 
 out = open("readings.csv", 'w')
 
-s = serial.Serial(2, 115200)
+s = serial.Serial("/dev/ttyUSB0", 115200)
 s.readline()
-print "let's go"
+print("let's go")
 
 def readLong():
     v, = struct.unpack('I', s.read(4))
@@ -15,12 +15,17 @@ def readLong():
 def readInt():
     v, = struct.unpack('h', s.read(2))
     return v
-    
+
+def readFloat():
+    v, = numpy.frombuffer(s.read(2), dtype=numpy.float16)
+    return v
+
 try:
     while True:
-        pwm = readInt()
-        tt = readLong()
-        out.write("{0};{1}\n".format(pwm, tt))
+        x, y, z = readFloat(), readFloat(), readFloat()
+        ln = "{0};{1};{2}\n".format(x, y, z)
+        print(ln)
+        out.write(ln)
 except KeyboardInterrupt:             
     out.close()
     s.close()
