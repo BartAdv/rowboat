@@ -3,6 +3,7 @@
 // http://letsmakerobots.com/node/38636
 
 #include "motor.h"
+#include "LPS.h"
 
 const int LEFT_MOTOR_DIR_PIN = 7;
 const int LEFT_MOTOR_PWM_PIN = 9;

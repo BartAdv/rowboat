@@ -1,3 +1,3 @@
-[submodule "libs/lps-arduino"]
-	path = libs/lps-arduino
+[submodule "minidriver/libs/lps-arduino"]
+	path = minidriver/libs/lps-arduino
 	url = https://github.com/pololu/lps-arduino
