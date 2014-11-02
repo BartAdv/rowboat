@@ -269,17 +269,11 @@ void setup()
 
 void sendData()
 {
-  static unsigned long t = 0;
-  if(millis() - t < 100)
-    return;
-  t = millis();
-  
   float x, y, z;
-  //IMU_readGyro(x, y, z);
-  Serial.write((char*)&x, 2);
-  Serial.write((char*)&y, 2);
-  Serial.write((char*)&z, 2);
-  Serial.write("\n", 1);
+  IMU_readGyro(x, y, z);
+  Serial.write((char*)&x, 4);
+  Serial.write((char*)&y, 4);
+  Serial.write((char*)&z, 4);
 }
 
 void loop()
