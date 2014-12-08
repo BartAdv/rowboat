@@ -10,13 +10,6 @@ const int RIGHT_MOTOR_PWM_PIN = 10;
 const int LEFT_ENCODER_PIN = 2;
 const int RIGHT_ENCODER_PIN = 3;
 
-const int DRIVE_FORWARD_TIME_MS = 1500;
-const int TURN_TIME_MS = 2000;
-
-const int MOTOR_CALIBRATION_TIME = 1000;
-int MotorCalibrationStart;
-CalibrationPhase MotorCalibrationProgress;
-
 int getLeftEncoderValue()
 {
   return digitalRead(LEFT_ENCODER_PIN);
@@ -58,23 +51,6 @@ void setForward(Motor& m)
 void setBackward(Motor& m)
 {
   m.Dir = LOW;
-}
-
-void startCalibration(Motor& m)
-{
-  m.LastEncoder = m.Encoder;
-}
-
-void updateMotorEfficiency(Motor& m)
-{
-  if(m.AppliedForce == 0)
-    return;
-
-  int adv = m.Encoder - m.LastEncoder;
-  if(adv > 0)
-  {
-    m.Efficiency = (float)adv / (float)m.AppliedForce;
-  }
 }
 
 void updateEncoder(Motor& m, int val)
@@ -167,6 +143,30 @@ void stop()
 int MovementSpeed = 150;
 int RotationSpeed = 150;
 
+void calibrate()
+{
+  Serial.println("Calibration started...");
+  int le = LeftMotor.Encoder;
+  int re = RightMotor.Encoder;
+  setMove(MovementSpeed, true);
+  applyForce(LeftMotor, 1);
+  applyForce(RightMotor, 1);
+  int st = millis();
+  while(1)
+  {
+    if(millis() - st > 1000)
+      break;
+    updateEncoders();
+    updateMotorPins();
+  }
+
+  int ladv = LeftMotor.Encoder - LeftMotor.LastEncoder;
+  int radv = RightMotor.Encoder - RightMotor.LastEncoder;
+  LeftMotor.Efficiency = (float)ladv / (float)LeftMotor.AppliedForce;
+  RightMotor.Efficiency = (float)radv / (float)RightMotor.AppliedForce;
+  Serial.println("Calibration done.");
+}
+
 void processSerialInput()
 {
   if(Serial.available() > 0)
@@ -228,7 +228,7 @@ void processSerialInput()
       LeftMotor.Efficiency = 1.0;
       RightMotor.Efficiency = 1.0;
     case 'c':
-      MotorCalibrationProgress = StartCalibration;
+      calibrate();
       break;
     default: // PANIC!
       stop();
@@ -240,38 +240,7 @@ void loop()
 {
   int t = millis();
 
-  updateEncoders();
-
-  if(MotorCalibrationProgress == StartCalibration)
-  {
-    if(LeftMotor.AttemptedForce == RightMotor.AttemptedForce
-      && LeftMotor.AttemptedForce != 0)
-    {
-      startCalibration(LeftMotor);
-      startCalibration(RightMotor);
-      MotorCalibrationProgress = CalibrationStarted;
-      MotorCalibrationStart = t;
-      Serial.println("Calibrating motors...");
-    }
-    else
-    {
-      Serial.println("Motors at different speed, can't calibrate");
-      MotorCalibrationProgress = CalibrationFinished;
-    }
-  }
-  if(MotorCalibrationProgress == CalibrationStarted && t - MotorCalibrationStart > MOTOR_CALIBRATION_TIME)
-  {
-    updateMotorEfficiency(LeftMotor);
-    updateMotorEfficiency(RightMotor);
-    MotorCalibrationProgress = CalibrationFinished;
-    Serial.println("Motor calibration done.");
-  }
-  if(LeftMotor.AttemptedForce != RightMotor.AttemptedForce)
-  {
-    Serial.println("Calibration interrupted");
-    MotorCalibrationProgress = CalibrationFinished;
-  }
-    
+  updateEncoders(); 
   processSerialInput();
   updateMotorPins();
 }

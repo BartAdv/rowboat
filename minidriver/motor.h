@@ -21,9 +21,4 @@ enum Direction
   Right
 };
 
-enum CalibrationPhase
-{
-  CalibrationFinished,
-  StartCalibration,
-  CalibrationStarted
-};
+
