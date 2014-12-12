@@ -1,18 +1,14 @@
 struct Motor
 {
-  int SpeedPin;
+  int PwmPin;
   int DirPin;
-  
-  float Efficiency;
-    
-  int Dir;
-  int AttemptedForce;
-  int AppliedForce;
-  int Encoder;
-  
-  int LastEncoderValue;
-  int LastEncoder;
-  int LastAppliedForce;
+
+  char Dir;
+  float Speed;
+  int Pwm;
+
+  volatile unsigned long EncoderTick;  
+  unsigned long LastEncoderTick;
 };
       
 enum Direction

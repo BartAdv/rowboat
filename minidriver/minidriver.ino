@@ -1,4 +1,5 @@
 // http://blog.dawnrobotics.co.uk/2013/11/getting-started-with-the-dagu-arduino-mini-driver-board/
+// http://letsmakerobots.com/node/38636
 
 #include "motor.h"
 
@@ -10,37 +11,18 @@ const int RIGHT_MOTOR_PWM_PIN = 10;
 const int LEFT_ENCODER_PIN = 2;
 const int RIGHT_ENCODER_PIN = 3;
 
-int getLeftEncoderValue()
-{
-  return digitalRead(LEFT_ENCODER_PIN);
-}
+const int POWER_PIN = 7;
 
-int getRightEncoderValue()
-{
-  return digitalRead(RIGHT_ENCODER_PIN);
-}
-
-//----------------------------------------------------------
-void setup()
-{
-  // Setup the pins
-  pinMode(LEFT_MOTOR_DIR_PIN, OUTPUT);
-  pinMode(LEFT_MOTOR_PWM_PIN, OUTPUT);
-  pinMode(RIGHT_MOTOR_DIR_PIN, OUTPUT);
-  pinMode(RIGHT_MOTOR_PWM_PIN, OUTPUT);
-
-  pinMode(LEFT_ENCODER_PIN, INPUT);
-  pinMode(RIGHT_ENCODER_PIN, INPUT);
-
-  Serial.begin(9600);
-  Serial.println("Thy bidding?");
-}
+// encoder gearwheel doesn't give the same length for 'up' and 'down' so we are tracking only one kind of change
+const int ENCODER_TICKS_PER_ROTATION = 16; 
+int MaxSpeed = 44;
 
 //----------------------------------------------------------
 
-void setForce(Motor& m, int force)
+void setSpeed(Motor& m, float speed)
 {
-  m.AttemptedForce = force;
+  m.Speed = speed;
+  m.Pwm = 200; // let's start from this value for the beginning
 }
 
 void setForward(Motor& m)
@@ -53,52 +35,51 @@ void setBackward(Motor& m)
   m.Dir = LOW;
 }
 
-void updateEncoder(Motor& m, int val)
+void encoderTick(Motor& m)
 {
-  if(val != m.LastEncoderValue)
-  {
-    m.LastEncoderValue = val;
-    m.Encoder++;
-  }
+  m.EncoderTick++;
 }
 
-void applyForce(Motor& m, float ratio)
+void updateMotorSpeed(Motor& m)
 {
-  m.AppliedForce = ratio < 1 ? m.AttemptedForce * ratio : m.AttemptedForce;
+  /*unsigned long attemptedTickTime = m.Speed > 0 ? 1000000 / (MaxSpeed * m.Speed) : 1000000;
+  if(m.Speed > 0 && attemptedTickTime < m.EncoderTickTime && m.Pwm < 255)
+    m.Pwm++;
+  if(attemptedTickTime > m.EncoderTickTime && m.Pwm > 0)
+    m.Pwm--;
+  m.LastEncoderTick = millis();*/
 }
 
 void updateMotorPins(Motor& m)
 {
-  analogWrite(m.SpeedPin, m.AppliedForce);
+  analogWrite(m.PwmPin, m.Pwm);
   digitalWrite(m.DirPin, m.Dir);
 }
 
 Motor LeftMotor = { 
-  LEFT_MOTOR_PWM_PIN, LEFT_MOTOR_DIR_PIN, 1.0 };
+  LEFT_MOTOR_PWM_PIN, LEFT_MOTOR_DIR_PIN };
 Motor RightMotor = { 
-  RIGHT_MOTOR_PWM_PIN, RIGHT_MOTOR_DIR_PIN, 1.0 };
+  RIGHT_MOTOR_PWM_PIN, RIGHT_MOTOR_DIR_PIN };
 
-void updateMotorPins()
+void leftEncoderISR()
 {
-  float l2r = LeftMotor.Efficiency / RightMotor.Efficiency;
-  float r2l = RightMotor.Efficiency / LeftMotor.Efficiency;
+  encoderTick(LeftMotor);
+}
 
-  applyForce(LeftMotor, r2l);
-  applyForce(RightMotor, l2r);
+void rightEncoderISR()
+{
+  encoderTick(RightMotor);
+}
 
+void updateMotors()
+{
+  updateMotorSpeed(LeftMotor);
+  updateMotorSpeed(RightMotor); 
   updateMotorPins(LeftMotor);
   updateMotorPins(RightMotor);
 }
 
-void updateEncoders()
-{
-  int leftEncoderValue = getLeftEncoderValue();
-  int rightEncoderValue = getRightEncoderValue();
-  updateEncoder(LeftMotor, leftEncoderValue);
-  updateEncoder(RightMotor, rightEncoderValue);
-}
-
-void setMove(int f, boolean forward)
+void setMove(float f, boolean forward)
 {
   if(forward)
   {
@@ -110,11 +91,11 @@ void setMove(int f, boolean forward)
     setBackward(LeftMotor);
     setBackward(RightMotor);
   }
-  setForce(LeftMotor, f);
-  setForce(RightMotor, f);
+  setSpeed(LeftMotor, f);
+  setSpeed(RightMotor, f);
 }
 
-void setTurn(Direction dir, int force)
+void setTurnInPlace(Direction dir, float speed)
 { 
   if(dir == Right)
   {
@@ -126,46 +107,41 @@ void setTurn(Direction dir, int force)
     setBackward(LeftMotor);
     setForward(RightMotor);
   }
-  setForce(LeftMotor, force);
-  setForce(RightMotor, force);
+  setSpeed(LeftMotor, speed);
+  setSpeed(RightMotor, speed);
+}
+
+void setTurn(Direction dir)
+{
+  if(dir == Right)
+  {
+    setSpeed(RightMotor, RightMotor.Speed + 0.1);
+  }
+  else
+  {
+    setSpeed(LeftMotor, LeftMotor.Speed + 0.1);
+  }
+}
+
+void setStraight()
+{
+  float speed = max(LeftMotor.Speed, RightMotor.Speed);
+  setSpeed(LeftMotor, speed);
+  setSpeed(RightMotor, speed);
 }
 
 void stop()
 {
-  setForce(LeftMotor, 0);
-  setForce(RightMotor, 0);
-  applyForce(LeftMotor, 1);
-  applyForce(RightMotor, 1);
+  LeftMotor.Speed = 0;
+  RightMotor.Speed = 0;
+  updateMotorPins(LeftMotor);
+  updateMotorPins(RightMotor);
 }
 
 //----------------------------------------------------------
 
-int MovementSpeed = 150;
-int RotationSpeed = 150;
-
-void calibrate()
-{
-  Serial.println("Calibration started...");
-  int le = LeftMotor.Encoder;
-  int re = RightMotor.Encoder;
-  setMove(MovementSpeed, true);
-  applyForce(LeftMotor, 1);
-  applyForce(RightMotor, 1);
-  int st = millis();
-  while(1)
-  {
-    if(millis() - st > 1000)
-      break;
-    updateEncoders();
-    updateMotorPins();
-  }
-
-  int ladv = LeftMotor.Encoder - LeftMotor.LastEncoder;
-  int radv = RightMotor.Encoder - RightMotor.LastEncoder;
-  LeftMotor.Efficiency = (float)ladv / (float)LeftMotor.AppliedForce;
-  RightMotor.Efficiency = (float)radv / (float)RightMotor.AppliedForce;
-  Serial.println("Calibration done.");
-}
+float MovementSpeed = 0.75;
+float RotationSpeed = 0.75;
 
 void processSerialInput()
 {
@@ -175,10 +151,10 @@ void processSerialInput()
     switch(cmd)
     {
     case 'a':
-      setTurn(Left, RotationSpeed);
+      setTurnInPlace(Left, RotationSpeed);
       break;
     case 'd':
-      setTurn(Right, RotationSpeed);
+      setTurnInPlace(Right, RotationSpeed);
       break;
     case 'w':
       setMove(MovementSpeed, true);
@@ -186,49 +162,44 @@ void processSerialInput()
     case 's':
       setMove(MovementSpeed, false);
       break;
+    case 'z':
+      setTurn(Left);
+      break;
+    case 'x':
+      setStraight();
+      break;
+    case 'c':
+      setTurn(Right);
+      break;
     case '[':
-      MovementSpeed -=10;
+      MovementSpeed -= 0.05;
       break;
     case ']':
-      MovementSpeed += 10;
+      MovementSpeed += 0.05;
       break;
     case ';':
-      RotationSpeed -= 10;
+      RotationSpeed -= 0.05;
       break;
     case '\'':
-      RotationSpeed += 10;
+      RotationSpeed += 0.05;
       break;
     case 'i':
-      Serial.print("Attempted force: ");
-      Serial.print(LeftMotor.AttemptedForce);
+      Serial.print("Speed: ");
+      Serial.print(LeftMotor.Speed);
       Serial.print(", ");
-      Serial.println(RightMotor.AttemptedForce);
-      Serial.print("Applied force: ");
-      Serial.print(LeftMotor.AppliedForce);
+      Serial.println(RightMotor.Speed);
+      Serial.print("PWM: ");
+      Serial.print(LeftMotor.Pwm);
       Serial.print(", ");
-      Serial.println(RightMotor.AppliedForce);    
+      Serial.println(RightMotor.Pwm);    
       Serial.print("Wheel encoders: ");
-      Serial.print(LeftMotor.Encoder);
-      Serial.print("/");
-      Serial.print(LeftMotor.LastEncoder);
+      Serial.print(LeftMotor.EncoderTick);
       Serial.print(", ");
-      Serial.print(RightMotor.Encoder);
-      Serial.print("/");
-      Serial.println(RightMotor.LastEncoder);
-      Serial.print("Motors efficiency: ");
-      Serial.print(LeftMotor.Efficiency);
-      Serial.print(", ");
-      Serial.println(RightMotor.Efficiency);
+      Serial.print(RightMotor.EncoderTick);
       Serial.print("Movement/rotation speed: ");
       Serial.print(MovementSpeed);
       Serial.print(", ");
       Serial.println(RotationSpeed);
-      break;
-    case 'r':
-      LeftMotor.Efficiency = 1.0;
-      RightMotor.Efficiency = 1.0;
-    case 'c':
-      calibrate();
       break;
     default: // PANIC!
       stop();
@@ -236,12 +207,54 @@ void processSerialInput()
   }
 }
 
+void setup()
+{
+  // Setup the pins
+  pinMode(LEFT_MOTOR_DIR_PIN, OUTPUT);
+  pinMode(LEFT_MOTOR_PWM_PIN, OUTPUT);
+  pinMode(RIGHT_MOTOR_DIR_PIN, OUTPUT);
+  pinMode(RIGHT_MOTOR_PWM_PIN, OUTPUT);
+ 
+  pinMode(LEFT_ENCODER_PIN, INPUT);
+  pinMode(RIGHT_ENCODER_PIN, INPUT);
+
+  attachInterrupt(0, leftEncoderISR, RISING);
+  attachInterrupt(1, rightEncoderISR, RISING);
+  
+  Serial.begin(9600);
+  Serial.println("Thy bidding?");
+}
+
+int TestTicks = 16 * 4;
+boolean Started = false;
+
 void loop()
 {
-  int t = millis();
-
-  updateEncoders(); 
-  processSerialInput();
-  updateMotorPins();
+  if(!Started && !Serial.available())
+    return;
+  Started = true;
+  
+  LeftMotor.Dir = RightMotor.Dir = 0;
+  
+  for(int pwm = 50; pwm < 256; pwm += 5)
+  {
+    LeftMotor.EncoderTick = RightMotor.EncoderTick = 0;
+    LeftMotor.Pwm = RightMotor.Pwm = pwm;
+    updateMotorPins(LeftMotor);
+    updateMotorPins(RightMotor);
+    unsigned int v = analogRead(POWER_PIN);
+    unsigned long t = micros();
+    while(LeftMotor.EncoderTick < TestTicks || RightMotor.EncoderTick < TestTicks) {}
+    t = micros() - t;
+    Serial.print(v);
+    Serial.print(", ");
+    Serial.print(pwm);
+    Serial.print(", ");
+    Serial.print(t);
+    Serial.print(", ");
+    Serial.print(LeftMotor.EncoderTick);
+    Serial.print(", ");
+    Serial.println(RightMotor.EncoderTick);
+  }
 }
 
