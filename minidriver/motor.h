@@ -4,7 +4,6 @@ struct Motor
   int DirPin;
 
   char Dir;
-  float Speed;
   int Pwm;
 
   volatile unsigned long EncoderTick;  
