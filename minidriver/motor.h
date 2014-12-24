@@ -6,8 +6,10 @@ struct Motor
   char Dir;
   int Pwm;
 
-  volatile unsigned long EncoderTick;  
-  unsigned long LastEncoderTick;
+  volatile unsigned long EncoderTick;
+  volatile unsigned long LastEncoderTick;
+  volatile unsigned long RotationTime;
+  volatile unsigned long LastRotationTime;
 };
       
 enum Direction

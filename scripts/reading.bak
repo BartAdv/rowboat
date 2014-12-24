@@ -1,0 +1,6 @@
+#lang racket
+(define-values (input output) (open-input-output-file "\\\\.\\com3"))
+
+(define (close)
+  (close-input-port input)
+  (close-output-port output))

@@ -34,14 +34,21 @@ void setBackward(Motor& m)
   m.Dir = LOW;
 }
 
+// called from ISR
 void encoderTick(Motor& m)
 {
+  unsigned long t = micros();
   m.EncoderTick++;
+  if(m.EncoderTick % ENCODER_TICKS_PER_ROTATION == 0)
+  {
+    m.RotationTime = t - m.LastRotationTime;
+    m.LastRotationTime = t;
+  }
 }
 
 int leftPwm(unsigned long ticktime)
 {
-  return 6892550.92794713 * pow(ticktime, -1.05923146);
+  return 10110101.81274920 * pow(ticktime, -1.10251771);
 }
 
 int rightPwm(unsigned long ticktime)
@@ -60,24 +67,52 @@ Motor LeftMotor = {
 Motor RightMotor = { 
   RIGHT_MOTOR_PWM_PIN, RIGHT_MOTOR_DIR_PIN };
 
+const int TRANSIENT_LENGTH  = 10000;
+
+bool detectTransient(byte signal, unsigned long& lastFall, unsigned long& lastRise)
+{
+  unsigned long t = micros();
+  
+  if(signal == LOW && t - lastRise > TRANSIENT_LENGTH)
+  {
+    lastFall = t;
+    return false;
+  }
+  if(signal == HIGH && t - lastFall > TRANSIENT_LENGTH)
+  {
+    lastRise = t;
+    return false;
+  }
+  return true;
+}
+
 void leftEncoderISR()
 {
-  encoderTick(LeftMotor);
+  /*static unsigned long lastRise, lastFall;
+  int v = digitalRead(LEFT_ENCODER_PIN);
+  if(detectTransient(v, lastRise, lastFall))
+    return;
+  
+  if(v == HIGH)*/
+    encoderTick(LeftMotor);
 }
 
 void rightEncoderISR()
 {
-  encoderTick(RightMotor);
-}
-
-void updateMotors()
-{
-  updateMotorPins(LeftMotor);
-  updateMotorPins(RightMotor);
+  /*static unsigned long lastRise, lastFall;
+  int v = digitalRead(RIGHT_ENCODER_PIN);
+  if(detectTransient(v, lastRise, lastFall))
+    return;
+  
+  if(v == HIGH)*/
+    encoderTick(RightMotor);
 }
 
 void setMove(unsigned long speed, boolean forward)
 {
+  LeftMotor.LastRotationTime = RightMotor.LastRotationTime = micros();
+  LeftMotor.RotationTime = RightMotor.RotationTime = 0;
+  
   if(forward)
   {
     setForward(LeftMotor);
@@ -112,6 +147,12 @@ void stop()
 {
   LeftMotor.Pwm = 0;
   RightMotor.Pwm = 0;
+  updateMotorPins(LeftMotor);
+  updateMotorPins(RightMotor);
+}
+
+void updateMotors()
+{
   updateMotorPins(LeftMotor);
   updateMotorPins(RightMotor);
 }
@@ -153,7 +194,7 @@ void processSerialInput()
       RotationSpeed -= 1000;
       break;
     case 'r':
-      LeftMotor.EncoderTick = RightMotor.EncoderTick = 0;
+      LeftMotor.EncoderTick = RightMotor.EncoderTick = 0;       
       break;
     case 'i':
       Serial.print("PWM: ");
@@ -164,10 +205,16 @@ void processSerialInput()
       Serial.print(LeftMotor.EncoderTick);
       Serial.print(", ");
       Serial.println(RightMotor.EncoderTick);
+      Serial.print("Rotation time: ");
+      Serial.print(LeftMotor.RotationTime);
+      Serial.print(", ");
+      Serial.println(RightMotor.RotationTime);
       Serial.print("Movement/rotation speed: ");
       Serial.print(MovementSpeed);
       Serial.print(", ");
       Serial.println(RotationSpeed);
+      Serial.print("Voltage: ");
+      Serial.println(analogRead(POWER_PIN));
       break;
     default: // PANIC!
       stop();
@@ -183,19 +230,91 @@ void setup()
   pinMode(RIGHT_MOTOR_DIR_PIN, OUTPUT);
   pinMode(RIGHT_MOTOR_PWM_PIN, OUTPUT);
  
-  pinMode(LEFT_ENCODER_PIN, INPUT);
-  pinMode(RIGHT_ENCODER_PIN, INPUT);
-
+  pinMode(LEFT_ENCODER_PIN, INPUT_PULLUP);
+  pinMode(RIGHT_ENCODER_PIN, INPUT_PULLUP);
+  
   attachInterrupt(0, leftEncoderISR, RISING);
   attachInterrupt(1, rightEncoderISR, RISING);
   
-  Serial.begin(9600);
+  pinMode(13, OUTPUT);
+  
+  Serial.begin(115200);
+  
+  //digitalWrite(13, HIGH);
   Serial.println("Thy bidding?");
+  //delay(100);
+  //digitalWrite(13, LOW);
 }
+
+void dumpRotationTime(Motor& m)
+{
+  Serial.print("Pwm, Rotation time: ");
+  Serial.print(m.Pwm);
+  Serial.print(", ");
+  Serial.println(m.RotationTime);
+}
+
+void dumpRotationInfo()
+{
+  static unsigned long lastlrot = 0;
+  static unsigned long lastrrot = 0;
+  
+  if(LeftMotor.RotationTime != lastlrot)
+  {
+    Serial.print("Left ");
+    dumpRotationTime(LeftMotor);
+    lastlrot = LeftMotor.RotationTime;
+  }
+  if(RightMotor.RotationTime != lastrrot)
+  {
+    Serial.print("Right ");
+    dumpRotationTime(RightMotor);
+    lastrrot = RightMotor.RotationTime;
+  }
+}
+
+void dumpTicks(Motor& m)
+{
+  Serial.print("ticks: ");
+  Serial.println(m.EncoderTick);
+}
+
+void dumpTicks()
+{
+  static unsigned long lastl, lastr;
+  
+  if(LeftMotor.EncoderTick != lastl)
+  {
+    Serial.print("Left ");
+    dumpTicks(LeftMotor);
+    lastl = LeftMotor.EncoderTick;
+  }
+  if(RightMotor.EncoderTick != lastr)
+  {
+    Serial.print("Right ");
+    dumpTicks(RightMotor);
+    lastr = RightMotor.EncoderTick;
+  }
+}
+
+void dumpReadings()
+{
+
+}
+
+boolean Started = false;
+
+void serialFlush(){
+  while(Serial.available() > 0) {
+    char t = Serial.read();
+  }
+}   
 
 void loop()
 {
-  processSerialInput();
-  updateMotors();
+  unsigned long t = micros();
+  int v = analogRead(A0);
+  Serial.write((char*)&t, 4);
+  Serial.write((char*)&v, 2);
 }
 
