@@ -67,45 +67,14 @@ Motor LeftMotor = {
 Motor RightMotor = { 
   RIGHT_MOTOR_PWM_PIN, RIGHT_MOTOR_DIR_PIN };
 
-const int TRANSIENT_LENGTH  = 10000;
-
-bool detectTransient(byte signal, unsigned long& lastFall, unsigned long& lastRise)
-{
-  unsigned long t = micros();
-  
-  if(signal == LOW && t - lastRise > TRANSIENT_LENGTH)
-  {
-    lastFall = t;
-    return false;
-  }
-  if(signal == HIGH && t - lastFall > TRANSIENT_LENGTH)
-  {
-    lastRise = t;
-    return false;
-  }
-  return true;
-}
-
 void leftEncoderISR()
 {
-  /*static unsigned long lastRise, lastFall;
-  int v = digitalRead(LEFT_ENCODER_PIN);
-  if(detectTransient(v, lastRise, lastFall))
-    return;
-  
-  if(v == HIGH)*/
-    encoderTick(LeftMotor);
+  encoderTick(LeftMotor);
 }
 
 void rightEncoderISR()
 {
-  /*static unsigned long lastRise, lastFall;
-  int v = digitalRead(RIGHT_ENCODER_PIN);
-  if(detectTransient(v, lastRise, lastFall))
-    return;
-  
-  if(v == HIGH)*/
-    encoderTick(RightMotor);
+  encoderTick(RightMotor);
 }
 
 void setMove(unsigned long speed, boolean forward)
@@ -312,9 +281,27 @@ void serialFlush(){
 
 void loop()
 {
-  unsigned long t = micros();
-  int v = analogRead(A0);
-  Serial.write((char*)&t, 4);
-  Serial.write((char*)&v, 2);
+  setForward(LeftMotor);
+  setBackward(RightMotor);
+  
+  for(int pwm = 50; pwm < 256; pwm+=5)
+  {
+    setPwm(LeftMotor, pwm);
+    setPwm(RightMotor, pwm);
+    updateMotorPins(LeftMotor);
+    updateMotorPins(RightMotor);
+    
+    for(int rc = 0; rc < 4; rc++)
+    {
+      LeftMotor.EncoderTick = RightMotor.EncoderTick = 0;
+      unsigned long t = micros();   
+      while(RightMotor.EncoderTick < 16) {}
+      t = micros() - t;
+      
+      Serial.write((char*)&t, 4);
+      Serial.write((char*)&pwm, 2);
+    }
+  }
+  //dumpTicks();
 }
 
