@@ -21,16 +21,19 @@ int MaxSpeed = 44;
 
 void setPwm(Motor& m, int pwm)
 {
+  analogWrite(m.PwmPin, pwm);
   m.Pwm = pwm;
 }
 
 void setForward(Motor& m)
 {
+  digitalWrite(m.DirPin, HIGH);
   m.Dir = HIGH;
 }
 
 void setBackward(Motor& m)
 {
+  digitalWrite(m.DirPin, LOW);
   m.Dir = LOW;
 }
 
@@ -39,11 +42,8 @@ void encoderTick(Motor& m)
 {
   unsigned long t = micros();
   m.EncoderTick++;
-  if(m.EncoderTick % ENCODER_TICKS_PER_ROTATION == 0)
-  {
-    m.RotationTime = t - m.LastRotationTime;
-    m.LastRotationTime = t;
-  }
+  m.EncoderTickTime = t - m.LastEncoderTickTime;
+  m.LastEncoderTickTime = t;
 }
 
 int leftPwm(unsigned long ticktime)
@@ -56,32 +56,31 @@ int rightPwm(unsigned long ticktime)
   return 270789377.66169600 * pow(ticktime, -1.43222890);
 }
 
-void updateMotorPins(Motor& m)
-{
-  analogWrite(m.PwmPin, m.Pwm);
-  digitalWrite(m.DirPin, m.Dir);
-}
-
 Motor LeftMotor = { 
   LEFT_MOTOR_PWM_PIN, LEFT_MOTOR_DIR_PIN };
 Motor RightMotor = { 
   RIGHT_MOTOR_PWM_PIN, RIGHT_MOTOR_DIR_PIN };
 
+Motor *const Motors[2] = { &LeftMotor, &RightMotor };
+
+volatile boolean leftTick = false;
+
 void leftEncoderISR()
 {
   encoderTick(LeftMotor);
+  leftTick = true;
 }
+
+volatile boolean rightTick = false;
 
 void rightEncoderISR()
 {
   encoderTick(RightMotor);
+  rightTick = true;
 }
 
 void setMove(unsigned long speed, boolean forward)
 {
-  LeftMotor.LastRotationTime = RightMotor.LastRotationTime = micros();
-  LeftMotor.RotationTime = RightMotor.RotationTime = 0;
-  
   if(forward)
   {
     setForward(LeftMotor);
@@ -114,16 +113,8 @@ void setTurnInPlace(Direction dir, unsigned long speed)
 
 void stop()
 {
-  LeftMotor.Pwm = 0;
-  RightMotor.Pwm = 0;
-  updateMotorPins(LeftMotor);
-  updateMotorPins(RightMotor);
-}
-
-void updateMotors()
-{
-  updateMotorPins(LeftMotor);
-  updateMotorPins(RightMotor);
+  for(int i=0; i<2; i++)
+    setPwm(*Motors[i], 0);
 }
 
 //----------------------------------------------------------
@@ -175,9 +166,6 @@ void processSerialInput()
       Serial.print(", ");
       Serial.println(RightMotor.EncoderTick);
       Serial.print("Rotation time: ");
-      Serial.print(LeftMotor.RotationTime);
-      Serial.print(", ");
-      Serial.println(RightMotor.RotationTime);
       Serial.print("Movement/rotation speed: ");
       Serial.print(MovementSpeed);
       Serial.print(", ");
@@ -215,37 +203,14 @@ void setup()
   //digitalWrite(13, LOW);
 }
 
-void dumpRotationTime(Motor& m)
-{
-  Serial.print("Pwm, Rotation time: ");
-  Serial.print(m.Pwm);
-  Serial.print(", ");
-  Serial.println(m.RotationTime);
-}
-
-void dumpRotationInfo()
-{
-  static unsigned long lastlrot = 0;
-  static unsigned long lastrrot = 0;
-  
-  if(LeftMotor.RotationTime != lastlrot)
-  {
-    Serial.print("Left ");
-    dumpRotationTime(LeftMotor);
-    lastlrot = LeftMotor.RotationTime;
-  }
-  if(RightMotor.RotationTime != lastrrot)
-  {
-    Serial.print("Right ");
-    dumpRotationTime(RightMotor);
-    lastrrot = RightMotor.RotationTime;
-  }
-}
-
 void dumpTicks(Motor& m)
 {
-  Serial.print("ticks: ");
-  Serial.println(m.EncoderTick);
+  Serial.print("pwm, ts, tt: ");
+  Serial.print(m.Pwm);
+  Serial.print(",");
+  Serial.print(m.EncoderTick);
+  Serial.print(",");
+  Serial.println(m.EncoderTickTime);
 }
 
 void dumpTicks()
@@ -271,7 +236,7 @@ void dumpReadings()
 
 }
 
-boolean Started = false;
+boolean Done = false;
 
 void serialFlush(){
   while(Serial.available() > 0) {
@@ -280,28 +245,37 @@ void serialFlush(){
 }   
 
 void loop()
-{
-  setForward(LeftMotor);
-  setBackward(RightMotor);
+{ 
+  Motor& m = LeftMotor;
+  setForward(m);
+  setPwm(m, 150);
+  processSerialInput();
+  dumpTicks();
+  return;
   
-  for(int pwm = 50; pwm < 256; pwm+=5)
+  for(int pwm=150; pwm<=170; pwm+=5)
   {
+    setForward(LeftMotor);
+    setForward(RightMotor);
     setPwm(LeftMotor, pwm);
     setPwm(RightMotor, pwm);
-    updateMotorPins(LeftMotor);
-    updateMotorPins(RightMotor);
+    LeftMotor.EncoderTick = RightMotor.EncoderTick = 0;
     
-    for(int rc = 0; rc < 4; rc++)
+    Motor& m = RightMotor;
+    volatile boolean& ticked = rightTick;
+    
+    while(m.EncoderTick < 128)
     {
-      LeftMotor.EncoderTick = RightMotor.EncoderTick = 0;
-      unsigned long t = micros();   
-      while(RightMotor.EncoderTick < 16) {}
-      t = micros() - t;
-      
-      Serial.write((char*)&t, 4);
+      while(!ticked) {}
+      noInterrupts();
+      ticked = false;
+      unsigned long tc = m.EncoderTick;
+      unsigned long tt = m.EncoderTickTime;
+      interrupts();
+        
       Serial.write((char*)&pwm, 2);
+      Serial.write((char*)&tt, 4);
     }
   }
-  //dumpTicks();
 }
 
