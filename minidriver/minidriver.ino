@@ -48,12 +48,12 @@ void encoderTick(Motor& m)
 
 int leftPwm(unsigned long ticktime)
 {
-  return 10110101.81274920 * pow(ticktime, -1.10251771);
+  return pow(ticktime / 41607161.2536758, -0.7039581);
 }
 
 int rightPwm(unsigned long ticktime)
 {
-  return 270789377.66169600 * pow(ticktime, -1.43222890);
+  return pow(ticktime / 42061109.0080257, -0.7066563);
 }
 
 Motor LeftMotor = { 
@@ -65,8 +65,21 @@ Motor *const Motors[2] = { &LeftMotor, &RightMotor };
 
 volatile boolean leftTick = false;
 
+boolean debounce(unsigned long& t)
+{
+  if(micros() - t > 10000) // tick time at 255pwm was around 17millis so this should be safe
+  {
+    t = micros();
+    return false;
+  }
+  return true;
+}
+
 void leftEncoderISR()
 {
+  static unsigned long t;
+  if(debounce(t))
+    return;
   encoderTick(LeftMotor);
   leftTick = true;
 }
@@ -75,6 +88,9 @@ volatile boolean rightTick = false;
 
 void rightEncoderISR()
 {
+  static unsigned long t;
+  if(debounce(t))
+    return;
   encoderTick(RightMotor);
   rightTick = true;
 }
@@ -179,6 +195,36 @@ void processSerialInput()
   }
 }
 
+void setPwmFrequency(int pin, int divisor) {
+  byte mode;
+  if(pin == 5 || pin == 6 || pin == 9 || pin == 10) {
+    switch(divisor) {
+      case 1: mode = 0x01; break;
+      case 8: mode = 0x02; break;
+      case 64: mode = 0x03; break;
+      case 256: mode = 0x04; break;
+      case 1024: mode = 0x05; break;
+      default: return;
+    }
+    if(pin == 5 || pin == 6) {
+      ;//TCCR0B = TCCR0B & 0b11111000 | mode;
+    } else {
+      TCCR1B = TCCR1B & 0b11111000 | mode;
+    }
+  } else if(pin == 3 || pin == 11) {
+    switch(divisor) {
+      case 1: mode = 0x01; break;
+      case 8: mode = 0x02; break;
+      case 32: mode = 0x03; break;
+      case 64: mode = 0x04; break;
+      case 128: mode = 0x05; break;
+      case 256: mode = 0x06; break;
+      case 1024: mode = 0x7; break;
+      default: return;
+    }
+    ;//TCCR2B = TCCR2B & 0b11111000 | mode;
+  }
+}
 void setup()
 {
   // Setup the pins
@@ -186,6 +232,8 @@ void setup()
   pinMode(LEFT_MOTOR_PWM_PIN, OUTPUT);
   pinMode(RIGHT_MOTOR_DIR_PIN, OUTPUT);
   pinMode(RIGHT_MOTOR_PWM_PIN, OUTPUT);
+ 
+  setPwmFrequency(9, 8);
  
   pinMode(LEFT_ENCODER_PIN, INPUT_PULLUP);
   pinMode(RIGHT_ENCODER_PIN, INPUT_PULLUP);
@@ -244,16 +292,28 @@ void serialFlush(){
   }
 }   
 
-void loop()
-{ 
-  Motor& m = LeftMotor;
-  setForward(m);
-  setPwm(m, 150);
-  processSerialInput();
-  dumpTicks();
-  return;
+void readings()
+{
+  static boolean Started = false;
+  if(!Started)
+  {
+    Motor& m = LeftMotor;
+    setForward(m);
+    setPwm(m, 125);
+    Started = true;
+  }
   
-  for(int pwm=150; pwm<=170; pwm+=5)
+  unsigned long t = micros();
+  int v = analogRead(A0);
+  int pv = analogRead(POWER_PIN);
+  Serial.write((char*)&t, 4);
+  Serial.write((char*)&v, 2);
+  Serial.write((char*)&pv, 2);
+}
+
+void readings2()
+{
+  for(int pwm=100; pwm<=255; pwm+=5)
   {
     setForward(LeftMotor);
     setForward(RightMotor);
@@ -279,3 +339,13 @@ void loop()
   }
 }
 
+void loop()
+{
+  static boolean Started  = false;
+  if(!Started)
+  {
+    setMove(28000, true);
+    Started = true;
+  }
+  dumpTicks();
+}
