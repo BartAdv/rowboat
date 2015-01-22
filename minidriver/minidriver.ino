@@ -95,7 +95,19 @@ void rightEncoderISR()
   rightTick = true;
 }
 
-void setMove(unsigned long speed, boolean forward)
+void setSpeed(unsigned long speed)
+{
+  setPwm(LeftMotor, leftPwm(speed));
+  setPwm(RightMotor, rightPwm(speed));
+}
+
+void setPwm(int leftPwm, int rightPwm)
+{
+  setPwm(LeftMotor, leftPwm);
+  setPwm(RightMotor, rightPwm);
+}
+
+void setMove(boolean forward)
 {
   if(forward)
   {
@@ -107,8 +119,6 @@ void setMove(unsigned long speed, boolean forward)
     setBackward(LeftMotor);
     setBackward(RightMotor);
   }
-  setPwm(LeftMotor, leftPwm(speed));
-  setPwm(RightMotor, rightPwm(speed));
 }
 
 void setTurnInPlace(Direction dir, unsigned long speed)
@@ -137,6 +147,8 @@ void stop()
 
 unsigned long MovementSpeed = 20000;
 unsigned long RotationSpeed = 8000;
+int LeftPwm = 200;
+int RightPwm = 200;
 
 void processSerialInput()
 {
@@ -152,10 +164,32 @@ void processSerialInput()
       setTurnInPlace(Right, RotationSpeed);
       break;
     case 'w':
-      setMove(MovementSpeed, true);
+      setMove(true);
+      setSpeed(MovementSpeed);
       break;
     case 's':
-      setMove(MovementSpeed, false);
+      setMove(false);
+      setSpeed(MovementSpeed);
+      break;
+    case 'W':
+      setMove(true);
+      setPwm(LeftPwm, RightPwm);
+      break;
+    case 'S':
+      setMove(false);
+      setPwm(LeftPwm, RightPwm);
+      break;
+    case '-':
+      LeftPwm++;
+      break;
+    case '_':
+      LeftPwm--;
+      break;
+    case '=':
+      RightPwm++;
+      break;
+    case '+':
+      RightPwm--;
       break;
     case '[':
       MovementSpeed += 1000;
@@ -172,23 +206,7 @@ void processSerialInput()
     case 'r':
       LeftMotor.EncoderTick = RightMotor.EncoderTick = 0;       
       break;
-    case 'i':
-      Serial.print("PWM: ");
-      Serial.print(LeftMotor.Pwm);
-      Serial.print(", ");
-      Serial.println(RightMotor.Pwm);    
-      Serial.print("Wheel encoders: ");
-      Serial.print(LeftMotor.EncoderTick);
-      Serial.print(", ");
-      Serial.println(RightMotor.EncoderTick);
-      Serial.print("Rotation time: ");
-      Serial.print("Movement/rotation speed: ");
-      Serial.print(MovementSpeed);
-      Serial.print(", ");
-      Serial.println(RotationSpeed);
-      Serial.print("Voltage: ");
-      Serial.println(analogRead(POWER_PIN));
-      break;
+
     default: // PANIC!
       stop();
     }
@@ -246,13 +264,14 @@ void setup()
   Serial.begin(115200);
   
   //digitalWrite(13, HIGH);
-  Serial.println("Thy bidding?");
+  //Serial.println("Thy bidding?");
   //delay(100);
   //digitalWrite(13, LOW);
 }
 
 void dumpTicks(Motor& m)
 {
+  return;
   Serial.print("pwm, ts, tt: ");
   Serial.print(m.Pwm);
   Serial.print(",");
@@ -263,6 +282,7 @@ void dumpTicks(Motor& m)
 
 void dumpTicks()
 {
+  return;
   static unsigned long lastl, lastr;
   
   if(LeftMotor.EncoderTick != lastl)
@@ -341,11 +361,5 @@ void readings2()
 
 void loop()
 {
-  static boolean Started  = false;
-  if(!Started)
-  {
-    setMove(28000, true);
-    Started = true;
-  }
-  dumpTicks();
+  processSerialInput();
 }

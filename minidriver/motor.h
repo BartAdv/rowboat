@@ -5,7 +5,7 @@ struct Motor
 
   char Dir;
   int Pwm;
-
+  
   volatile unsigned long EncoderTick;
   volatile unsigned long EncoderTickTime;
   volatile unsigned long LastEncoderTickTime;
