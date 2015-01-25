@@ -1,3 +1,4 @@
+
 // http://blog.dawnrobotics.co.uk/2013/11/getting-started-with-the-dagu-arduino-mini-driver-board/
 // http://letsmakerobots.com/node/38636
 
@@ -264,53 +265,16 @@ void setup()
   Serial.begin(115200);
   
   //digitalWrite(13, HIGH);
-  //Serial.println("Thy bidding?");
+  Serial.println("Thy bidding?");
+  int i = 1;
+  Serial.print(i);
+  float f;
+  Serial.write((char*)&f, 2);
   //delay(100);
   //digitalWrite(13, LOW);
 }
 
-void dumpTicks(Motor& m)
-{
-  return;
-  Serial.print("pwm, ts, tt: ");
-  Serial.print(m.Pwm);
-  Serial.print(",");
-  Serial.print(m.EncoderTick);
-  Serial.print(",");
-  Serial.println(m.EncoderTickTime);
-}
-
-void dumpTicks()
-{
-  return;
-  static unsigned long lastl, lastr;
-  
-  if(LeftMotor.EncoderTick != lastl)
-  {
-    Serial.print("Left ");
-    dumpTicks(LeftMotor);
-    lastl = LeftMotor.EncoderTick;
-  }
-  if(RightMotor.EncoderTick != lastr)
-  {
-    Serial.print("Right ");
-    dumpTicks(RightMotor);
-    lastr = RightMotor.EncoderTick;
-  }
-}
-
-void dumpReadings()
-{
-
-}
-
 boolean Done = false;
-
-void serialFlush(){
-  while(Serial.available() > 0) {
-    char t = Serial.read();
-  }
-}   
 
 void readings()
 {
