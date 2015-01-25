@@ -1,0 +1,3 @@
+[submodule "libs/lps-arduino"]
+	path = libs/lps-arduino
+	url = https://github.com/pololu/lps-arduino
